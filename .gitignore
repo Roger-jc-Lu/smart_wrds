@@ -1,0 +1,42 @@
+# Don't track Python virtual environments
+.venv/
+env/
+venv/
+
+# Don't track environment secrets
+.env
+
+# Don't track Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Don't track Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# VSCode settings (if you're using VS Code)
+.vscode/
+
+# MacOS system files
+.DS_Store
+
+# Jupyter Notebook output and metadata
+*.nbconvert.ipynb
+
+# General logs or debug output
+*.log
+
+# Optional: ignore data files
+*.csv
+*.xlsx
+*.parquet
+*.h5
+
+# Optional: compiled files
+*.so
+*.dll
+*.exe
+
+# Optional: OS generated files
+Thumbs.db
+desktop.ini

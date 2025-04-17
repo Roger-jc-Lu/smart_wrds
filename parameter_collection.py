@@ -3,6 +3,7 @@ import re
 import datetime
 import json
 import requests
+from dotenv import load_dotenv
 
 import streamlit as st
 from langchain.chat_models import ChatOpenAI
@@ -13,6 +14,7 @@ st.set_page_config(page_title="Param Collector", layout="wide")
 st.title("Stock Data Collection")
 
 # OpenAI and LangChain setup 
+load_dotenv()
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 if not OPENAI_KEY:
     OPENAI_KEY = st.sidebar.text_input("OpenAI API Key", type="password")
