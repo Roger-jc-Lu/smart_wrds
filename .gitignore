@@ -1,0 +1,28 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode settings (optional)
+.vscode/
+
+# macOS system files
+.DS_Store
+
+# Streamlit cache (optional)
+.streamlit/cache/
+
+# Log files
+*.log
+
+# Environment variables (optional)
+.env
