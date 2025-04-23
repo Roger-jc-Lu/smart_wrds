@@ -2,7 +2,7 @@ import os
 import json
 import datetime
 import streamlit as st
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import wrds_ohlc_api as wrds  # Your custom module
 
@@ -22,39 +22,16 @@ if not OPENAI_KEY:
 if OPENAI_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_KEY
 
+f = open("init_prompt.txt", "r")
+init_prompt = f.read()
+f.close()
+
 # Chatbot memory
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "system",
-            "content": """
-You are a parameter-collection assistant. Your job is to gather exactly four pieces of information from the user:
-  • ticker: a stock symbol (any case). You must normalize it to uppercase and confirm its validity.
-  • start_date: a date string. Users may enter in any reasonable format (e.g. "2020/1/5", "Jan 5, 2020", "20200105", "2020").
-  • end_date: a date string, same flexibility as start_date.
-  • granularity: one of [1s, 5s, 15s, 30s, 1m, 2m, 5m, 15m, 30m, 60m, 1h, 1d].
-
-Requirements:
-1. **Date parsing & validation**  
-   - Parse any common date format the user provides.  
-   - If only a year(e.g. "2015") is given as start_date, auto-fill missing month/day as "01-01"; If only a year(e.g. "2018") 
-   is given as end_date, auto-fill missing month/day as "12-31".
-   - If a year range (e.g. "2015-2019") is given, auto-fill start_date as "01-01" and end_date as "12-31".
-   - If a year and month(e.g. "Jun 2015") is given, auto-fill missing day as "01".
-   - Check that neither start_date nor end_date is relying on the real-time for example "today", "a month/week ago", etc, or goes beyond "2024-12-31".
-    If so, set the end_date to "2024-12-31" and calculate the start_date respectively. Then ask for confirmation.
-
-2. **Granularity fallback**  
-   - If the user's granularity isn't in the allowed list (e.g. "3m"), compute the nearest lower and higher valid options (e.g. "2m" and "5m") and ask "Would you like 2m or 5m?".
-
-3. **Ticker confirmation**  
-   - If ticker is in lowercase, it is valid and normalize the ticker to uppercase.  
-   - If ticker looks invalid, suggest a similar ticker and ask "Did you mean X? (yes/no)".
-
-Continue asking follow-up questions until you have valid values for all four fields.  
-Once collected, respond **only** with pure JSON, for example:
-{"ticker":"AAPL","start_date":"2020-01-01","end_date":"2023-06-10","granularity":"1m"}
-"""  
+            "content": init_prompt
         }
     ]
 
@@ -108,7 +85,13 @@ if st.session_state.params:
         end_date = datetime.datetime.strptime(params["end_date"], "%Y-%m-%d").date()
         granularity = params["granularity"]
 
-        df = wrds.get_adjusted_ohlc(db, ticker, start_date, end_date, granularity)
+        raw_df = wrds.get_multi_month_data(db, ticker, start_date, end_date, granularity)
+        event_df = wrds.get_events(db, ticker, start_date, end_date)
+        # TODO: event came from either the above function call or RAG if symbol in RAG
+        df = wrds.adjust_ohlc(raw_df, event_df)
+
+        # CANT USE THIS, only for showcasing
+        # df = wrds.get_adjusted_ohlc(db, ticker, start_date, end_date, granularity)
         st.success("✅ Data successfully retrieved!")
         st.dataframe(df.head())
     except Exception as e:

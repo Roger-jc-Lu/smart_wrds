@@ -114,6 +114,7 @@ def get_multi_month_data(db, ticker, start_date, end_date, granularity):
                 print(f"Error retrieving data for {y}-{m:02d}: {e}")
 
     final_df = pd.concat(dataframes).sort_values(by='timestamp').reset_index(drop=True)
+    final_df["ticker"] = ticker
     return final_df
 
 def get_events(ticker):
@@ -121,6 +122,7 @@ def get_events(ticker):
     df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
     events = df[(df['Dividends'] > 0) | (df['Stock Splits'] > 0)]
     events = events[['Dividends', 'Stock Splits']]
+    events["ticker"] = ticker
     return events
 
 def adjust_ohlc(raw_df, event_df):
