@@ -1,202 +1,123 @@
-import streamlit as st
 import os
-import base64
-import tempfile
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
-from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
-from langchain.agents import AgentType, initialize_agent, Tool
-from langchain_huggingface import HuggingFaceEmbeddings
+import json
+import datetime
+import io
+import streamlit as st
+import mplfinance as mpf
+from PIL import Image
 from langchain_openai import ChatOpenAI
+from langchain.schema import SystemMessage, HumanMessage, AIMessage
+import wrds_ohlc_api as wrds
 
-import PyPDF2
+# --- Configuration ---
+USRNAME = os.getenv("PGUSER")
+PASSWORD = os.getenv("PGPASSWORD")
+VALID_KEYS = {"ticker", "start_date", "end_date", "granularity"}
 
-st.set_page_config(
-    page_title="Simple RAG App",
-    page_icon=":rocket:",
-    layout="wide"
-)
+st.set_page_config(page_title="Smart WRDS", layout="wide")
+st.title("📊 Stock Data Retriever")
 
-@st.cache_resource
-def create_llm(api_key: str):
-    """
-    Cache the creation of the OpenAI LLM so it's not re-initialized on every run
-    with the same key & temperature settings.
-    """
-    return ChatOpenAI(model="gpt-4o", temperature=0, api_key=api_key)
+# Load prompt
+f = open("init_prompt.txt", "r", encoding="utf-8")
+init_prompt = f.read()
+f.close()
 
-@st.cache_resource
-def create_vectorstore(_docs):
-    """
-    Cache the creation of the Chroma vector store. 
-    If 'docs' has not changed, this won't be recomputed.
-    """
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Session state
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "system", "type": "text", "content": init_prompt}]
+if "params" not in st.session_state:
+    st.session_state.params = None
 
-    vectorstore = Chroma.from_documents(
-        documents=_docs,
-        embedding=embeddings,
-        collection_name="financial_docs",
-        persist_directory="./chroma_langchain_db",
-    )
+# OpenAI Key
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_KEY:
+    OPENAI_KEY = st.sidebar.text_input("OpenAI API Key", type="password")
+if OPENAI_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_KEY
 
-    return vectorstore
+# RENDER chat history — now handles text/image/error inline
+for msg in st.session_state.messages[1:]:  # skip system message
+    with st.chat_message(msg["role"]):
+        if msg["type"] == "text":
+            st.markdown(msg["content"])
+        elif msg["type"] == "error":
+            st.error(msg["content"])
+        elif msg["type"] == "image":
+            st.image(msg["content"], caption="📈 Candlestick Snapshot", use_column_width=True)
 
-st.title("Upload Document RAG Application")
-st.write("Upload your documents and ask questions about them.")
+# New user input
+if prompt := st.chat_input("Ask for stock data..."):
+    st.session_state.messages.append({"role": "user", "type": "text", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-openai_api_key = st.text_input("Enter your OpenAI API Key:", type="password")
-if not openai_api_key:
-    st.warning("Please add your OpenAI API key to proceed.")
-    st.stop()
-
-llm = create_llm(openai_api_key)
-
-uploaded_files = st.file_uploader(
-    "Upload PDF(s)",
-    type=["pdf"],
-    accept_multiple_files=True
-)
-
-all_docs = []
-
-
-col1, col2 = st.columns([1,1])
-
-with col1:
-    st.subheader("PDF Previews")
-    if uploaded_files:
-        for i, uploaded_file in enumerate(uploaded_files):
-            pdf_data = uploaded_file.read()
-            base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-            pdf_display = (
-                f'<iframe '
-                f'src="data:application/pdf;base64,{base64_pdf}" '
-                f'width="100%" height="500px" '
-                f'type="application/pdf"></iframe>'
-            )
-            st.markdown(f"**File {i+1}:** {uploaded_file.name}")
-            st.markdown(pdf_display, unsafe_allow_html=True)
-            uploaded_files[i].seek(0)
-
-with col2:
-    st.subheader("Chat & Retrieval")
-    if uploaded_files:
-        all_texts = []
-        for uploaded_file in uploaded_files:
-            pdf_reader = PyPDF2.PdfReader(uploaded_file)
-            text = "".join(
-                page.extract_text() or ""
-                for page in pdf_reader.pages
-            )
-            all_texts.append(text)
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
-        for txt in all_texts:
-            chunks = text_splitter.split_text(txt)
-            for chunk in chunks:
-                doc = Document(page_content=chunk, metadata={})
-                all_docs.append(doc)
-
-        if all_docs:
-            vectorstore = create_vectorstore(all_docs)
-            retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
-
-            if "messages" not in st.session_state:
-                st.session_state["messages"] = []
-
-            for message in st.session_state["messages"]:
-                if message["role"] == "user":
-                    with st.chat_message("user"):
-                        st.write(message["content"])
-                else:
-                    with st.chat_message("assistant"):
-                        st.write(message["content"])
-
-            user_query = st.chat_input("Ask a question about your document(s) ...")
-            if user_query:
-                st.session_state["messages"].append({"role": "user", "content": user_query})
-                with st.chat_message("user"):
-                    st.write(user_query)
-
-                qa_chain = RetrievalQA.from_chain_type(
-                    llm=llm,
-                    retriever=retriever,
-                    return_source_documents=True,
-                    verbose=True
-                )
-
-                with st.spinner("Assistant is thinking..."):
-                    result = qa_chain({"query": user_query})
-                    answer = result["result"]
-                    sources = result["source_documents"]
-
-                st.session_state["messages"].append({"role": "assistant", "content": answer})
-                with st.chat_message("assistant"):
-                    st.write(answer)
-                    with st.expander("Source Documents"):
-                        for i, doc in enumerate(sources):
-                            st.write(f"**Source {i+1}:** {doc.page_content[:500]}...")
-
+    if not OPENAI_KEY:
+        reply = "Please enter a valid OpenAI API Key in the sidebar."
+        st.session_state.messages.append({"role": "assistant", "type": "text", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
     else:
-        st.info("No PDF uploaded yet. Please upload one or more PDFs.")
+        # Run LLM
+        lc_msgs = []
+        for m in st.session_state.messages:
+            if m["role"] == "system":
+                lc_msgs.append(SystemMessage(content=m["content"]))
+            elif m["role"] == "user":
+                lc_msgs.append(HumanMessage(content=m["content"]))
+            elif m["type"] == "text":
+                lc_msgs.append(AIMessage(content=m["content"]))
 
+        llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
+        ai_out = llm(lc_msgs)
 
-st.header("Agent Demo: Calculator Tool")
-st.write("Demonstration of using an agent with tools for simple tasks.")
+        try:
+            parsed = json.loads(ai_out.content)
+            if VALID_KEYS.issubset(parsed):
+                st.session_state.params = parsed
+            else:
+                st.session_state.messages.append({"role": "assistant", "type": "text", "content": ai_out.content})
+                with st.chat_message("assistant"):
+                    st.markdown(ai_out.content)
+        except json.JSONDecodeError:
+            st.session_state.messages.append({"role": "assistant", "type": "text", "content": ai_out.content})
+            with st.chat_message("assistant"):
+                st.markdown(ai_out.content)
 
-from langchain.callbacks.base import BaseCallbackHandler
-
-class StreamlitCallbackHandler(BaseCallbackHandler):
-    def __init__(self, steps_placeholder):
-        self.steps_placeholder = steps_placeholder
-        self.step_logs = ""
-
-    def on_tool_start(self, tool_name, tool_input, **kwargs):
-        """Logs when a tool starts."""
-        self.step_logs += f"**Tool Used:** {tool_name}\n**Input:** {tool_input}\n\n"
-        self.steps_placeholder.markdown(self.step_logs, unsafe_allow_html=True)
-
-    def on_tool_end(self, output, **kwargs):
-        """Logs when a tool finishes."""
-        self.step_logs += f"**Output:** {output}\n\n---\n\n"
-        self.steps_placeholder.markdown(self.step_logs, unsafe_allow_html=True)
-
-def calculator_tool(input_str: str) -> str:
-    """Perform simple mathematical calculations."""
+# Fetch + render inline chart if confirmed
+if st.session_state.params:
     try:
-        return str(eval(input_str))
+        with st.chat_message("assistant"):
+            with st.spinner("Retrieving the data..."):
+                params = st.session_state.params
+                db = wrds.init_db_connection(USRNAME, PASSWORD)
+                ticker = params["ticker"]
+                start_date = datetime.datetime.strptime(params["start_date"], "%Y-%m-%d").date()
+                end_date = datetime.datetime.strptime(params["end_date"], "%Y-%m-%d").date()
+                granularity = params["granularity"]
+
+                raw_df = wrds.get_multi_month_data(db, ticker, start_date, end_date, granularity)
+                event_df = wrds.get_events(ticker)
+                df = wrds.adjust_ohlc(raw_df, event_df)
+
+                df_mpf = df.set_index("timestamp")[["open", "high", "low", "close"]]
+                df_mpf.index.name = "Date"
+
+                buf = io.BytesIO()
+                mpf.plot(df_mpf, type='candle', style='charles', ylabel='Price', savefig=buf)
+                buf.seek(0)
+                image = Image.open(buf)
+
+                # Store result inline
+                st.session_state.messages.append({"role": "assistant", "type": "image", "content": image})
+                st.session_state.messages.append({"role": "assistant", "type": "text", "content": "✅ Data successfully retrieved!"})
+                st.image(image, caption="📈 Candlestick Snapshot", use_column_width=True)
+                st.markdown("✅ Data successfully retrieved!")
+
+        st.session_state.params = None
+
     except Exception as e:
-        return f"Error: {str(e)}"
-
-calc_tool = Tool(
-    name="Calculator",
-    func=calculator_tool,
-    description="Perform simple mathematical calculations."
-)
-
-agent_tools = [calc_tool]
-agent = initialize_agent(agent_tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION)
-
-agent_query = st.text_input("Ask the agent with tools (e.g., '2+2', '10*5', etc.)")
-if agent_query:
-    st.info("Agent is processing...")
-
-    with st.expander("Step-by-Step Agent Logs", expanded=True):
-        st.write("Processing steps will appear here...")
-        steps_placeholder = st.empty()
-
-    callback_handler = StreamlitCallbackHandler(steps_placeholder)
-
-    try:
-        response = agent.run(
-            input=agent_query,
-            callbacks=[callback_handler]
-        )
-
-        st.success("Agent processing complete!")
-        st.write("**Agent Response:**", response)
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+        error_msg = f"❌ Error retrieving data: {e}"
+        st.session_state.messages.append({"role": "assistant", "type": "error", "content": error_msg})
+        with st.chat_message("assistant"):
+            st.error(error_msg)
+        st.session_state.params = None
