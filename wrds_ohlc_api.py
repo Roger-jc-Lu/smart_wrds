@@ -123,10 +123,10 @@ def get_ohlc_data(db, ticker, year, granularity, start_date=None, end_date=None)
         )
         SELECT
             interval_start AS timestamp,
-            (ARRAY_AGG(price ORDER BY ts))[1] AS open,
+            (ARRAY_AGG(price ORDER BY ts DESC) FILTER (WHERE price IS NOT NULL))[1] AS close
             MAX(price) AS high,
             MIN(price) AS low,
-            (ARRAY_AGG(price ORDER BY ts DESC))[1] AS close
+            (ARRAY_AGG(price ORDER BY ts DESC) FILTER (WHERE price IS NOT NULL))[1] AS close
         FROM intervals
         GROUP BY interval_start
         ORDER BY interval_start
