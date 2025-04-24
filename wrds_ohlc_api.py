@@ -396,20 +396,11 @@ def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
                  event_df = pd.DataFrame(columns=['Dividends', 'Stock Splits'], index=pd.DatetimeIndex([]))
 
 
-    if event_df is not None:
-         event_df_filtered = event_df[(event_df.index >= pd.Timestamp(start_date)) & (event_df.index <= pd.Timestamp(end_date))]
-         if event_df_filtered.empty and not event_df.empty:
-              print(f"Warning: No relevant event data found within the specific date range {start_date} to {end_date} for adjustment.")
-
-         if event_df_filtered.empty:
-              print(f"No event data available for {ticker} in range {start_date} to {end_date}. Skipping adjustment.")
-              adjusted_df = raw_df.copy()
-              for col in ['Dividends', 'Stock Splits']:
-                   if col not in adjusted_df.columns: adjusted_df[col] = 0
-         else:
-              adjusted_df = adjust_ohlc(raw_df.copy(), event_df_filtered)
-    else:
+    if event_df.empty:
         print("Error: Event data is None after attempting load and fetch. Cannot perform adjustments.")
         adjusted_df = raw_df.copy()
+    else:
+        adjusted_df = adjust_ohlc(raw_df.copy(), event_df)
+
 
     return adjusted_df
