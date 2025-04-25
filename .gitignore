@@ -12,6 +12,11 @@ env/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+# Databases
+__pycache__/
+data_cache/
+vector_db_cache_chroma/
+
 # VSCode settings (optional)
 .vscode/
 
