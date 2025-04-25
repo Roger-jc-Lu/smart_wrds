@@ -1,9 +1,8 @@
 ## Smart WRDS:
-## A Free GenAI Boosted Market Data Solution for Students
+## A Free GenAI-Boosted Market Data Solution for Students
 
 This is a class project for 2025 Spring MATHGR5470 A MATHEMATICAL APPROACH TO GENERATIVE AI
 
-The project solve the problem by integrating stock splitting and dividend payout events into the WRDS data, fixing it’s weakness and preserving the advantage to form a
-continuous and accurate market data output.
+The project solves the problem by integrating stock splitting and dividend payout events into the WRDS data, fixing its weaknesses and preserving its advantages to form a continuous and accurate market data output through cross-exchange tick-level NBBO.
 
-Currently contains the sample class GenAI app demo and wrds usage.
+Currently empowered with streamlit front-end demo UI, GenAI user-friendly input, and ChromaDB Vector Store RAG that could be extended for future expansion.
