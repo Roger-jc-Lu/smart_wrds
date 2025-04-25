@@ -271,7 +271,7 @@ def load_events(ticker: str) -> pd.DataFrame | None:
 
         if not results or not results.get('ids'):
             print(f"No events found for {ticker} in the specified date range in ChromaDB vector store.")
-            return pd.DataFrame(columns=['Dividends', 'Stock Splits'], index=pd.DatetimeIndex([]))
+            return None
 
         event_data = []
         metadatas = results['metadatas']
@@ -300,7 +300,7 @@ def load_events(ticker: str) -> pd.DataFrame | None:
 
         if not event_data:
              print(f"No valid event data reconstructed for {ticker}.")
-             return pd.DataFrame(columns=['Dividends', 'Stock Splits'], index=pd.DatetimeIndex([]))
+             return None
 
         temp_df = pd.DataFrame(event_data)
         reconstructed_df = temp_df.groupby('Date').agg(
@@ -351,19 +351,19 @@ def adjust_ohlc(raw_df, event_df):
 
 def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
     initialize_vector_store()
+    fetch_fresh = False
     raw_df = get_multi_month_data(db, ticker, start_date, end_date, granularity)
 
     if not isinstance(_vector_store, Chroma): 
-         print("Error: Critical components (ChromaDB or Embedding Model) failed to initialize. Returning raw_df.")
-         return raw_df 
+        print("Error: Critical components (ChromaDB or Embedding Model) failed to initialize.")
+        fetch_fresh = True
 
     if raw_df is None or raw_df.empty:
-         print(f"Error: Failed to retrieve raw OHLC data for {ticker}. Cannot adjust.")
-         return raw_df 
+        print(f"Error: Failed to retrieve raw OHLC data for {ticker}. Cannot adjust.")
+        fetch_fresh = True
 
     event_df = load_events(ticker)
 
-    fetch_fresh = False
     if event_df is None:
          print("Failed to load suitable events from ChromaDB vector store.")
          fetch_fresh = True
@@ -377,7 +377,7 @@ def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
                  save_events(ticker, fresh_event_df)
                  event_df = fresh_event_df 
             else: 
-                 print(f"Warning: Failed to fetch event data for {ticker} from yfinance.")
+                 print(f"event data empty for {ticker} from yfinance.")
                  if event_df is None: 
                       event_df = pd.DataFrame(columns=['Dividends', 'Stock Splits'], index=pd.DatetimeIndex([]))
 
@@ -389,9 +389,9 @@ def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
 
     if event_df.empty:
         print("Error: Event data is None after attempting load and fetch. Cannot perform adjustments.")
-        adjusted_df = raw_df.copy()
+        adjusted_df = raw_df
     else:
-        adjusted_df = adjust_ohlc(raw_df.copy(), event_df)
+        adjusted_df = adjust_ohlc(raw_df, event_df)
 
 
     return adjusted_df
