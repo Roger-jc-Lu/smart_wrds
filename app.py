@@ -45,7 +45,7 @@ for msg in st.session_state.messages[1:]:  # skip system message
         elif msg["type"] == "error":
             st.error(msg["content"])
         elif msg["type"] == "image":
-            st.image(msg["content"], caption="📈 Candlestick Snapshot", use_column_width=True)
+            st.image(msg["content"], caption="📈 Candlestick Snapshot", use_container_width=True)
 
 # New user input
 if prompt := st.chat_input("Ask for stock data..."):
@@ -70,7 +70,7 @@ if prompt := st.chat_input("Ask for stock data..."):
                 lc_msgs.append(AIMessage(content=m["content"]))
 
         llm = ChatOpenAI(model_name="gpt-4o", temperature=0)
-        ai_out = llm(lc_msgs)
+        ai_out = llm.invoke(lc_msgs)
 
         try:
             parsed = json.loads(ai_out.content)
@@ -111,7 +111,7 @@ if st.session_state.params:
                 # Store result inline
                 st.session_state.messages.append({"role": "assistant", "type": "image", "content": image})
                 st.session_state.messages.append({"role": "assistant", "type": "text", "content": "✅ Data successfully retrieved!"})
-                st.image(image, caption="📈 Candlestick Snapshot", use_column_width=True)
+                st.image(image, caption="📈 Candlestick Snapshot", use_container_width=True)
                 st.markdown("✅ Data successfully retrieved!")
 
         st.session_state.params = None

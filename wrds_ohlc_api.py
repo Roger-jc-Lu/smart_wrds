@@ -8,7 +8,7 @@ from pathlib import Path
 import yfinance as yf
 
 from langchain_chroma import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 
 VECTOR_DB_PATH = Path("./vector_db_cache_chroma")
@@ -250,7 +250,6 @@ def save_events(ticker: str, event_df: pd.DataFrame):
         vector_store.add_documents(documents=documents_to_add, ids=ids_to_add)
         # Persisting is generally handled automatically by ChromaDB in persistent mode,
         # but calling it explicitly ensures writes are flushed if needed.
-        vector_store.persist()
         print(f"Successfully saved/updated {len(documents_to_add)} events for {ticker} in ChromaDB vector store.")
 
     except Exception as e:
@@ -266,11 +265,7 @@ def load_events(ticker: str) -> pd.DataFrame | None:
 
     try:
         results = vector_store.get(
-            where={
-                "$and": [
-                    {"ticker": ticker}
-                ]
-            },
+            where={"ticker": ticker}, # Direct filter for the ticker field
             include=["metadatas"] # Only need metadata
         )
 
