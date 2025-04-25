@@ -44,28 +44,28 @@ st.set_page_config(page_title="Smart WRDS", layout="wide")
 st.title("📊 Stock Data Retriever")
 
 
-# --- Sidebar controls for interactivity ---
-with st.sidebar:
-    st.header('Query Parameters')
-    days = st.slider('Past N days', min_value=1, max_value=365, value=30)
-    today = datetime.date.today()
-    start_date = today - datetime.timedelta(days=days)
-    end_date = today
+# # --- Sidebar controls for interactivity ---
+# with st.sidebar:
+#     st.header('Query Parameters')
+#     days = st.slider('Past N days', min_value=1, max_value=365, value=30)
+#     today = datetime.date.today()
+#     start_date = today - datetime.timedelta(days=days)
+#     end_date = today
 
-    indicators = st.multiselect(
-        'Add indicators', ['None', 'SMA', 'EMA', 'RSI', 'MACD'], default=['None']
-    )
-
-
-    granularity = st.radio(
-        'Granularity', ['1d', '1h', '30m', '15m'], index=0
-    )
+#     indicators = st.multiselect(
+#         'Add indicators', ['None', 'SMA', 'EMA', 'RSI', 'MACD'], default=['None']
+#     )
 
 
-    theme = st.radio(
-        'Theme', ['Light', 'Dark'], index=0
+#     granularity = st.radio(
+#         'Granularity', ['1d', '1h', '30m', '15m'], index=0
+#     )
 
-    )
+
+#     theme = st.radio(
+#         'Theme', ['Light', 'Dark'], index=0
+
+#     )
 
 
 # Load prompt
@@ -87,14 +87,22 @@ if OPENAI_KEY:
     os.environ["OPENAI_API_KEY"] = OPENAI_KEY
 
 # RENDER chat history — now handles text/image/error inline
-for msg in st.session_state.messages[1:]:  # skip system message
+for idx, msg in enumerate(st.session_state.messages[1:]):  # skip system message
     with st.chat_message(msg["role"]):
         if msg["type"] == "text":
             st.markdown(msg["content"])
         elif msg["type"] == "error":
             st.error(msg["content"])
         elif msg["type"] == "image":
-            st.image(msg["content"], caption="📈 Candlestick Snapshot", use_container_width=True)
+            st.image(msg["content"], caption="📈 Candlestick Snapshot")
+        elif msg["type"] == "download":
+            st.download_button(
+                label="📥 Download OHLC Data (Excel)",
+                data=msg["content"],
+                file_name="ohlc_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_{idx}"
+            )
 
 # New user input
 if prompt := st.chat_input("Ask for stock data..."):
@@ -149,27 +157,32 @@ if st.session_state.params:
                 # event_df = wrds.get_events(ticker)
                 df = wrds.get_adjusted_ohlc(db, ticker, start_date, end_date, granularity)
 
-                st.write("Do you want to download the data?")
-                want_excel = st.radio("Do you want to download the data?", ("No", "Yes"))
+                df_mpf = df.set_index("timestamp")[["open", "high", "low", "close"]]
+                df_mpf.index.name = "Date"
 
-                if want_excel == "Yes":
-                    buffer = io.BytesIO()
-                    df.to_excel(buffer, index=False)
-                    buffer.seek(0)
+                buf = io.BytesIO()
+                mpf.plot(df_mpf, type='candle', style='charles', ylabel='Price', savefig=buf)
+                buf.seek(0)
+                image = Image.open(buf)
 
-                    
-                    st.download_button(
-                        label="Download OHLC data (Excel)",
-                        data=buffer,
-                        file_name="ohlc_data.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                excel_buffer = io.BytesIO()
+                df.to_excel(excel_buffer, index=False)
+                excel_buffer.seek(0)
 
-                fig = plotly_candlestick(df, theme)
-                st.plotly_chart(fig, use_container_width=True)
+                # Store results inline in session_state
+                st.session_state.messages.append({"role": "assistant", "type": "image", "content": image})
+                st.session_state.messages.append({"role": "assistant", "type": "text", "content": "✅ Data successfully retrieved!"})
+                st.session_state.messages.append({"role": "assistant", "type": "download", "content": excel_buffer})
+
+                # Immediate display after retrieval
+                st.image(image, caption="📈 Candlestick Snapshot")
                 st.markdown("✅ Data successfully retrieved!")
-
-
+                st.download_button(
+                    label="📥 Download OHLC Data (Excel)",
+                    data=excel_buffer,
+                    file_name="ohlc_data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
         st.session_state.params = None
 
