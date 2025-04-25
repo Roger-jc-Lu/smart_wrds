@@ -8,8 +8,10 @@ from PIL import Image
 from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import wrds_ohlc_api as wrds
+from dotenv import load_dotenv
 
 # --- Configuration ---
+load_dotenv()
 USRNAME = os.getenv("PGUSER")
 PASSWORD = os.getenv("PGPASSWORD")
 VALID_KEYS = {"ticker", "start_date", "end_date", "granularity"}
@@ -94,10 +96,9 @@ if st.session_state.params:
                 start_date = datetime.datetime.strptime(params["start_date"], "%Y-%m-%d").date()
                 end_date = datetime.datetime.strptime(params["end_date"], "%Y-%m-%d").date()
                 granularity = params["granularity"]
-
-                raw_df = wrds.get_multi_month_data(db, ticker, start_date, end_date, granularity)
-                event_df = wrds.get_events(ticker)
-                df = wrds.adjust_ohlc(raw_df, event_df)
+                # raw_df = wrds.get_multi_month_data(db, ticker, start_date, end_date, granularity)
+                # event_df = wrds.get_events(ticker)
+                df = wrds.get_adjusted_ohlc(db, ticker, start_date, end_date, granularity)
 
                 df_mpf = df.set_index("timestamp")[["open", "high", "low", "close"]]
                 df_mpf.index.name = "Date"

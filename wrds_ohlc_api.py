@@ -48,7 +48,7 @@ def initialize_embedding_model():
 
 def initialize_vector_store():
     global _vector_store
-    if _vector_store is None: 
+    if not isinstance(_vector_store, Chroma): 
         embedding_func = initialize_embedding_model()
         if embedding_func:
             try:
@@ -123,7 +123,7 @@ def get_ohlc_data(db, ticker, year, granularity, start_date=None, end_date=None)
         )
         SELECT
             interval_start AS timestamp,
-            (ARRAY_AGG(price ORDER BY ts DESC) FILTER (WHERE price IS NOT NULL))[1] AS close
+            (ARRAY_AGG(price ORDER BY ts) FILTER (WHERE price IS NOT NULL))[1] AS open,
             MAX(price) AS high,
             MIN(price) AS low,
             (ARRAY_AGG(price ORDER BY ts DESC) FILTER (WHERE price IS NOT NULL))[1] AS close
@@ -256,7 +256,7 @@ def save_events(ticker: str, event_df: pd.DataFrame):
     except Exception as e:
         print(f"Error adding event data for {ticker} to ChromaDB vector store: {e}")
 
-def load_events(ticker: str, start_date: date, end_date: date) -> pd.DataFrame | None:
+def load_events(ticker: str) -> pd.DataFrame | None:
     vector_store = initialize_vector_store()
     if not isinstance(vector_store, Chroma):
         print("Error: LangChain vector store not available. Cannot load events.")
@@ -264,16 +264,11 @@ def load_events(ticker: str, start_date: date, end_date: date) -> pd.DataFrame |
 
     # print(f"Querying ChromaDB vector store for events for {ticker} between {start_date} and {end_date}...")
 
-    start_timestamp = datetime.combine(start_date, datetime.min.time()).timestamp()
-    end_timestamp = datetime.combine(end_date, datetime.max.time()).timestamp()
-
     try:
         results = vector_store.get(
             where={
                 "$and": [
-                    {"ticker": ticker},
-                    {"timestamp": {"$gte": start_timestamp}},
-                    {"timestamp": {"$lte": end_timestamp}}
+                    {"ticker": ticker}
                 ]
             },
             include=["metadatas"] # Only need metadata
@@ -360,6 +355,7 @@ def adjust_ohlc(raw_df, event_df):
     return raw_df
 
 def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
+    initialize_vector_store()
     raw_df = get_multi_month_data(db, ticker, start_date, end_date, granularity)
 
     if not isinstance(_vector_store, Chroma): 
@@ -370,7 +366,7 @@ def get_adjusted_ohlc(db, ticker, start_date, end_date, granularity):
          print(f"Error: Failed to retrieve raw OHLC data for {ticker}. Cannot adjust.")
          return raw_df 
 
-    event_df = load_events(ticker, start_date=start_date, end_date=end_date)
+    event_df = load_events(ticker)
 
     fetch_fresh = False
     if event_df is None:
