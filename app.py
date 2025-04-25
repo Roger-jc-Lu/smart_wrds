@@ -10,6 +10,28 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import wrds_ohlc_api as wrds
 from dotenv import load_dotenv
 from io import BytesIO
+import plotly.graph_objects as go
+
+
+def plotly_candlestick(df, theme="Light"):
+    fig = go.Figure(data=[go.Candlestick(
+        x=df['timestamp'],
+        open=df['open'],
+        high=df['high'],
+        low=df['low'],
+        close=df['close'],
+    )])
+    template = "plotly_dark" if theme == "Dark" else "plotly_white"
+    fig.update_layout(
+        title='Candlestick Chart',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        xaxis_rangeslider_visible=False,
+        template=template
+    )
+    return fig
+
+
 
 
 # --- Configuration ---
@@ -20,6 +42,31 @@ VALID_KEYS = {"ticker", "start_date", "end_date", "granularity"}
 
 st.set_page_config(page_title="Smart WRDS", layout="wide")
 st.title("📊 Stock Data Retriever")
+
+
+# --- Sidebar controls for interactivity ---
+with st.sidebar:
+    st.header('Query Parameters')
+    days = st.slider('Past N days', min_value=1, max_value=365, value=30)
+    today = datetime.date.today()
+    start_date = today - datetime.timedelta(days=days)
+    end_date = today
+
+    indicators = st.multiselect(
+        'Add indicators', ['None', 'SMA', 'EMA', 'RSI', 'MACD'], default=['None']
+    )
+
+
+    granularity = st.radio(
+        'Granularity', ['1d', '1h', '30m', '15m'], index=0
+    )
+
+
+    theme = st.radio(
+        'Theme', ['Light', 'Dark'], index=0
+
+    )
+
 
 # Load prompt
 f = open("init_prompt.txt", "r", encoding="utf-8")
@@ -118,20 +165,11 @@ if st.session_state.params:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-                
-                df_mpf = df.set_index("timestamp")[["open", "high", "low", "close"]]
-                df_mpf.index.name = "Date"
-
-                buf = io.BytesIO()
-                mpf.plot(df_mpf, type='candle', style='charles', ylabel='Price', savefig=buf)
-                buf.seek(0)
-                image = Image.open(buf)
-
-                # Store result inline
-                st.session_state.messages.append({"role": "assistant", "type": "image", "content": image})
-                st.session_state.messages.append({"role": "assistant", "type": "text", "content": "✅ Data successfully retrieved!"})
-                st.image(image, caption="📈 Candlestick Snapshot", use_container_width=True)
+                fig = plotly_candlestick(df, theme)
+                st.plotly_chart(fig, use_container_width=True)
                 st.markdown("✅ Data successfully retrieved!")
+
+
 
         st.session_state.params = None
 
