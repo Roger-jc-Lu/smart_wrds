@@ -9,6 +9,8 @@ from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import wrds_ohlc_api as wrds
 from dotenv import load_dotenv
+from io import BytesIO
+
 
 # --- Configuration ---
 load_dotenv()
@@ -45,7 +47,7 @@ for msg in st.session_state.messages[1:]:  # skip system message
         elif msg["type"] == "error":
             st.error(msg["content"])
         elif msg["type"] == "image":
-            st.image(msg["content"], caption="📈 Candlestick Snapshot")
+            st.image(msg["content"], caption="📈 Candlestick Snapshot", use_container_width=True)
 
 # New user input
 if prompt := st.chat_input("Ask for stock data..."):
@@ -100,6 +102,23 @@ if st.session_state.params:
                 # event_df = wrds.get_events(ticker)
                 df = wrds.get_adjusted_ohlc(db, ticker, start_date, end_date, granularity)
 
+                st.write("Do you want to download the data?")
+                want_excel = st.radio("Do you want to download the data?", ("No", "Yes"))
+
+                if want_excel == "Yes":
+                    buffer = io.BytesIO()
+                    df.to_excel(buffer, index=False)
+                    buffer.seek(0)
+
+                    
+                    st.download_button(
+                        label="Download OHLC data (Excel)",
+                        data=buffer,
+                        file_name="ohlc_data.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                
                 df_mpf = df.set_index("timestamp")[["open", "high", "low", "close"]]
                 df_mpf.index.name = "Date"
 
@@ -111,7 +130,7 @@ if st.session_state.params:
                 # Store result inline
                 st.session_state.messages.append({"role": "assistant", "type": "image", "content": image})
                 st.session_state.messages.append({"role": "assistant", "type": "text", "content": "✅ Data successfully retrieved!"})
-                st.image(image, caption="📈 Candlestick Snapshot")
+                st.image(image, caption="📈 Candlestick Snapshot", use_container_width=True)
                 st.markdown("✅ Data successfully retrieved!")
 
         st.session_state.params = None
