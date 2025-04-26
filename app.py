@@ -12,27 +12,23 @@ from dotenv import load_dotenv
 from io import BytesIO
 import plotly.graph_objects as go
 
-
-def plotly_candlestick(df, theme="Light"):
-    fig = go.Figure(data=[go.Candlestick(
-        x=df['timestamp'],
-        open=df['open'],
-        high=df['high'],
-        low=df['low'],
-        close=df['close'],
-    )])
-    template = "plotly_dark" if theme == "Dark" else "plotly_white"
-    fig.update_layout(
-        title='Candlestick Chart',
-        xaxis_title='Date',
-        yaxis_title='Price',
-        xaxis_rangeslider_visible=False,
-        template=template
-    )
-    return fig
-
-
-
+# def plotly_candlestick(df, theme="Light"):
+#     fig = go.Figure(data=[go.Candlestick(
+#         x=df['timestamp'],
+#         open=df['open'],
+#         high=df['high'],
+#         low=df['low'],
+#         close=df['close'],
+#     )])
+#     template = "plotly_dark" if theme == "Dark" else "plotly_white"
+#     fig.update_layout(
+#         title='Candlestick Chart',
+#         xaxis_title='Date',
+#         yaxis_title='Price',
+#         xaxis_rangeslider_visible=False,
+#         template=template
+#     )
+#     return fig
 
 # --- Configuration ---
 load_dotenv()
